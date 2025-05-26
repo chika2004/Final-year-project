@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Satellite View - Landmark University</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background: #0b0c10;
+      overflow: hidden;
+      color: white;
+    }
+    #sidebar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 260px;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+      padding: 2rem 1.5rem;
+      z-index: 10;
+      transform: translateX(-100%);
+      transition: transform 0.6s ease;
+    }
+    #sidebar.open { transform: translateX(0); }
+    #sidebar h1 {
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+      color: orangered;
+    }
+    #sidebar button {
+      display: block;
+      width: 100%;
+      margin: 10px 0;
+      padding: 12px;
+      font-size: 1rem;
+      background: linear-gradient(to right, #0072ff, #00c6ff);
+      border: none;
+      color: white;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    #sidebar button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 15px rgba(0,198,255,0.6);
+    }
+    #toggleBtn {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      z-index: 20;
+      background: orangered;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <button id="toggleBtn">☰ Menu</button>
+  <div id="sidebar">
+    <h1>🛰️ Landmark Satellite</h1>
+    <button onclick="zoomToLandmark()">🔍 Zoom to Landmark University</button>
+    <button onclick="loadSentinelImage()">🌐 Load Live Sentinel Image</button>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoiY2hpY2hhcml0bzIwMDQiLCJhIjoiY21iMHA5MDVmMHhjeDJrc2JrZGNub2U1ZyJ9.gliBqeZ4maEz___2XPu7Mw'; // Replace with your token
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/satellite-streets-v12',
+      center: [5.1045, 8.1262],
+      zoom: 8
+    });
+
+    const LANDMARK_COORDS = [5.1045, 8.1262];
+
+    function zoomToLandmark() {
+      map.flyTo({
+        center: LANDMARK_COORDS,
+        zoom: 17,
+        pitch: 60,
+        bearing: 20,
+        speed: 1.2,
+        curve: 1.5,
+        essential: true
+      });
+
+      new mapboxgl.Marker({ color: 'orangered' })
+        .setLngLat(LANDMARK_COORDS)
+        .addTo(map);
+    }
+
+    async function loadSentinelImage() {
+      const imageUrl = `http://localhost:5000/sentinel-image?lat=8.1262&lng=5.1045`;
+      const imgBounds = [
+        [5.101, 8.124],
+        [5.108, 8.128]
+      ];
+      const imageLayerId = 'sentinel-image-layer';
+
+      if (map.getLayer(imageLayerId)) {
+        map.removeLayer(imageLayerId);
+        map.removeSource(imageLayerId);
+      }
+
+      map.addSource(imageLayerId, {
+        type: 'image',
+        url: imageUrl,
+        coordinates: [
+          [5.101, 8.128],
+          [5.108, 8.128],
+          [5.108, 8.124],
+          [5.101, 8.124]
+        ]
+      });
+
+      map.addLayer({
+        id: imageLayerId,
+        type: 'raster',
+        source: imageLayerId,
+        paint: { 'raster-opacity': 0.85 }
+      });
+    }
+
+    document.getElementById('toggleBtn').addEventListener('click', () => {
+      document.getElementById('sidebar').classList.toggle('open');
+    });
+  </script>
+</body>
+</html>
