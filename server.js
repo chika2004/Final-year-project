@@ -1,70 +1,66 @@
-
+// server.js - Proxy backend to fetch live Sentinel imagery
+require('dotenv').config({ path: '.env.local' });
 const express = require('express');
-const fetch = require('node-fetch');
+const axios = require('axios');
 const app = express();
-const PORT = 5000;
+const port = process.env.PORT || 3001;
 
-const CLIENT_ID = '4c3fbfae-c21f-4824-aa29-44d9f3800c6a'; // Replace with your Sentinel Hub client ID
-const CLIENT_SECRET = 'JkN6BBiXYyyCxzrltxt2EsC46Siy5MlE'; // Replace with your Sentinel Hub client secret
+const SENTINEL_CLIENT_ID = process.env.SENTINEL_CLIENT_ID;
+const SENTINEL_CLIENT_SECRET = process.env.SENTINEL_CLIENT_SECRET;
 
-const LANDMARK_COORDS = {
-  lat: 8.1264,
-  lng: 5.0892
-};
+let cachedToken = null;
+let tokenExpiry = null;
 
-app.get('/sentinel-image', async (req, res) => {
+// Get OAuth2 token from Sentinel Hub
+async function getAccessToken() {
+  if (cachedToken && tokenExpiry > Date.now()) return cachedToken;
+
+  const response = await axios.post('https://services.sentinel-hub.com/oauth/token', {
+    client_id: SENTINEL_CLIENT_ID,
+    client_secret: SENTINEL_CLIENT_SECRET,
+    grant_type: 'client_credentials'
+  });
+
+  cachedToken = response.data.access_token;
+  tokenExpiry = Date.now() + (response.data.expires_in - 60) * 1000; // buffer 60 seconds
+  return cachedToken;
+}
+
+// Proxy endpoint to fetch imagery
+app.get('/api/sentinel-image', async (req, res) => {
   try {
-    const authResponse = await fetch('https://services.sentinel-hub.com/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        grant_type: 'client_credentials'
-      })
-    });
-    const authData = await authResponse.json();
-    const token = authData.access_token;
+    const token = await getAccessToken();
 
-    const response = await fetch(`https://services.sentinel-hub.com/api/v1/process`, {
-      method: 'POST',
+    const bbox = '5.0925,8.1198,5.0985,8.1238'; // Approximate bounding box for Landmark University
+
+    const sentinelResponse = await axios.get('https://services.sentinel-hub.com/ogc/wms/<INSTANCE_ID>', {
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify({
-        input: {
-          bounds: {
-            bbox: [LANDMARK_COORDS.lng - 0.005, LANDMARK_COORDS.lat - 0.005, LANDMARK_COORDS.lng + 0.005, LANDMARK_COORDS.lat + 0.005]
-          },
-          data: [{ type: "sentinel-2-l1c" }]
-        },
-        output: {
-          width: 512,
-          height: 512,
-          responses: [{ identifier: "default", format: { type: "image/png" } }]
-        },
-        evalscript: `
-          //VERSION=3
-          function setup() {
-            return {
-              input: ["B04", "B03", "B02"],
-              output: { bands: 3 }
-            };
-          }
-          function evaluatePixel(sample) {
-            return [sample.B04, sample.B03, sample.B02];
-          }
-        `
-      })
+      params: {
+        SERVICE: 'WMS',
+        REQUEST: 'GetMap',
+        BBOX: bbox,
+        FORMAT: 'image/jpeg',
+        WIDTH: 1024,
+        HEIGHT: 1024,
+        LAYERS: 'TRUE_COLOR',
+        MAXCC: 10,
+        TIME: '2024-05-01/2024-05-23',
+        SRS: 'EPSG:4326',
+        VERSION: '1.3.0'
+      },
+      responseType: 'arraybuffer'
     });
 
-    const imageBuffer = await response.buffer();
-    res.set('Content-Type', 'image/png');
-    res.send(imageBuffer);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to get satellite image' });
+    res.set('Content-Type', 'image/jpeg');
+    res.send(sentinelResponse.data);
+  } catch (err) {
+    console.error(err.response ? err.response.data : err.message);
+    res.status(500).json({ error: 'Failed to fetch Sentinel image' });
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+app.listen(port, () => {
+  console.log(`Sentinel proxy server running on http://localhost:${port}`);
+});
