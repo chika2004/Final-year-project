@@ -1,136 +1,30 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Landmark University Live Satellite Viewer</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-    body {
-      margin: 0;
-      font-family: 'Poppins', sans-serif;
-      background: #111;
-      color: white;
-      overflow: hidden;
-    }
-    #sidebar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 300px;
-      height: 100%;
-      background: rgba(0,0,0,0.9);
-      padding: 2rem;
-      transform: translateX(-100%);
-      transition: transform 0.4s ease;
-      z-index: 999;
-    }
-    #sidebar.open {
-      transform: translateX(0);
-    }
-    #toggleBtn {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      z-index: 1000;
-      background: orangered;
-      border: none;
-      padding: 10px 15px;
-      border-radius: 5px;
-      color: white;
-      cursor: pointer;
-    }
-    .button-group button {
-      display: block;
-      width: 100%;
-      margin-bottom: 10px;
-      padding: 10px;
-      font-size: 1rem;
-      background: linear-gradient(to right, #0072ff, #00c6ff);
-      border: none;
-      border-radius: 20px;
-      cursor: pointer;
-      transition: 0.3s ease;
-    }
-    .button-group button:hover {
-      transform: scale(1.05);
-    }
-    #map {
-      width: 100vw;
-      height: 100vh;
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 0;
-    }
-    #imageContainer {
-      position: absolute;
-      bottom: 20px;
-      right: 20px;
-      background: #000000dd;
-      padding: 10px;
-      border-radius: 12px;
-      max-width: 500px;
-      max-height: 300px;
-      overflow: auto;
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Landmark Satellite Viewer</title>
 </head>
-<body>
-  <button id="toggleBtn">☰ Menu</button>
-
-  <div id="sidebar">
-    <h2>🛰️ Satellite Controls</h2>
-    <div class="button-group">
-      <button onclick="zoomToLandmark()">🔍 Zoom to Landmark University</button>
-      <button id="liveImageBtn">🛰️ View Live Imagery</button>
-    </div>
-  </div>
-
-  <div id="map"></div>
-  <div id="imageContainer"></div>
-
-  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+<body style="font-family: Arial; background: #111; color: white; padding: 2rem;">
+  <h1>🛰️ Landmark University Satellite Viewer</h1>
+  <button onclick="showLiveImage()" style="padding: 10px 20px; font-size: 1rem;">Load Live Sentinel Image</button>
   <script>
-    mapboxgl.accessToken = 'pk.eyJ1IjoiY2hpY2hhcml0bzIwMDQiLCJhIjoiY21iMHA5MDVmMHhjeDJrc2JrZGNub2U1ZyJ9.gliBqeZ4maEz___2XPu7Mw'; // Replace with your real token
-
-    const map = new mapboxgl.Map({
-      container: 'map',
-      style: 'mapbox://styles/mapbox/satellite-streets-v12',
-      center: [5.1000, 8.1235],
-      zoom: 10
-    });
-
-    function zoomToLandmark() {
-      map.flyTo({
-        center: [5.1000, 8.1235],
-        zoom: 17,
-        pitch: 60,
-        bearing: 20,
-        speed: 1.2,
-        curve: 1.5,
-        essential: true
-      });
-
-      new mapboxgl.Marker({ color: 'orangered' })
-        .setLngLat([5.1000, 8.1235])
-        .addTo(map);
+    function showLiveImage() {
+      fetch('/api/sentinel-image')
+        .then(res => res.blob())
+        .then(blob => {
+          const url = URL.createObjectURL(blob);
+          const img = document.createElement('img');
+          img.src = url;
+          img.style.maxWidth = '500px';
+          img.style.marginTop = '20px';
+          img.style.border = '4px solid white';
+          img.style.borderRadius = '10px';
+          document.body.appendChild(img);
+        })
+        .catch(err => alert('Failed to load Sentinel image: ' + err));
     }
-
-    document.getElementById('toggleBtn').addEventListener('click', () => {
-      document.getElementById('sidebar').classList.toggle('open');
-    });
-
-    document.getElementById('liveImageBtn').addEventListener('click', async () => {
-      const response = await fetch('/api/sentinel');
-      const blob = await response.blob();
-      const imgUrl = URL.createObjectURL(blob);
-      document.getElementById('imageContainer').innerHTML = `<img src="${imgUrl}" style="width:100%;border-radius:12px;" />`;
-    });
   </script>
 </body>
 </html>
