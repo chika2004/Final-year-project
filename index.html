@@ -1,30 +1,199 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Landmark Satellite Viewer</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Landmark University Satellite Viewer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: 'Poppins', sans-serif;
+            background: #0f2027;
+            color: white;
+            overflow: hidden;
+        }
+        #sidebar {
+            position: absolute;
+            top: 0; left: 0;
+            width: 300px; height: 100%;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            transform: translateX(-100%);
+            transition: transform 0.5s ease-in-out;
+            z-index: 2;
+        }
+        #sidebar.open {
+            transform: translateX(0);
+        }
+        #toggle-btn {
+            position: absolute;
+            top: 1rem; left: 1rem;
+            z-index: 3;
+            background: orangered;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 1rem;
+            color: white;
+        }
+        h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+        p { font-size: 1rem; margin-bottom: 2rem; }
+        button.control {
+            width: 100%;
+            margin-bottom: 1rem;
+            padding: 12px;
+            font-size: 1rem;
+            background: linear-gradient(to right, #0072ff, #00c6ff);
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+        }
+        button.control:hover {
+            box-shadow: 0 5px 15px rgba(0,198,255,0.4);
+        }
+        #map {
+            position: absolute;
+            top: 0; left: 0;
+            height: 100%; width: 100%;
+            z-index: 1;
+        }
+    </style>
 </head>
-<body style="font-family: Arial; background: #111; color: white; padding: 2rem;">
-  <h1>🛰️ Landmark University Satellite Viewer</h1>
-  <button onclick="showLiveImage()" style="padding: 10px 20px; font-size: 1rem;">Load Live Sentinel Image</button>
-  <script>
-    function showLiveImage() {
-      fetch('/api/sentinel-image')
-        .then(res => res.blob())
-        .then(blob => {
-          const url = URL.createObjectURL(blob);
-          const img = document.createElement('img');
-          img.src = url;
-          img.style.maxWidth = '500px';
-          img.style.marginTop = '20px';
-          img.style.border = '4px solid white';
-          img.style.borderRadius = '10px';
-          document.body.appendChild(img);
-        })
-        .catch(err => alert('Failed to load Sentinel image: ' + err));
-    }
-  </script>
+<body>
+    <button id="toggle-btn">☰ Menu</button>
+    <div id="sidebar">
+        <h1>🛰️ Parking Slot Visualizer</h1>
+        <p>Explore recent and live satellite imagery of select area.</p>
+        <button class="control" id="zoom-btn">🔍 Zoom to Landmark</button>
+        <button class="control" id="live-btn">🟢 Show Satellite Image</button>
+        <button class="control" id="hide-btn" style="background: grey; display: none;">🔴 Hide Satellite Image</button>
+    </div>
+
+    <div id="map"></div>
+    
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1IjoiY2hpY2hhcml0bzIwMDQiLCJhIjoiY21iMHA5MDVmMHhjeDJrc2JrZGNub2U1ZyJ9.gliBqeZ4maEz___2XPu7Mw';
+
+        const landmarkCoords = [5.0871978, 8.1226595]; // [Lng, Lat]
+        
+        const map = new mapboxgl.Map({
+            container: 'map',
+            // Start with a base Mapbox style, e.g., satellite-streets-v12
+            style: 'mapbox://styles/mapbox/satellite-streets-v12', 
+            center: landmarkCoords,
+            zoom: 13,
+            pitch: 45,
+            bearing: 0
+        });
+
+        // Sidebar toggle button
+        document.getElementById('toggle-btn').onclick = () => {
+            document.getElementById('sidebar').classList.toggle('open');
+        };
+
+        // Zoom button
+        document.getElementById('zoom-btn').onclick = () => {
+            map.flyTo({
+                center: landmarkCoords,
+                zoom: 17,
+                pitch: 60,
+                bearing: -20,
+                speed: 1.2,
+                curve: 1.4,
+                essential: true
+            });
+
+            // Add marker only if it doesn't exist
+            if (!map.getSource('landmark-marker')) {
+                map.addSource('landmark-marker', {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: landmarkCoords
+                        }
+                    }
+                });
+                map.addLayer({
+                    id: 'landmark-marker-layer',
+                    type: 'circle',
+                    source: 'landmark-marker',
+                    paint: {
+                        'circle-radius': 10,
+                        'circle-color': 'orangered',
+                        'circle-stroke-width': 2,
+                        'circle-stroke-color': '#fff'
+                    }
+                });
+            }
+        };
+
+        // Live Sentinel Image button (Show)
+        document.getElementById('live-btn').onclick = async () => {
+            try {
+                // Fetch the tile URL template from your backend
+                const response = await fetch('/api/sentinel-image'); 
+                const data = await response.json(); // Expecting JSON with a 'url' property
+
+                if (data.error) {
+                    alert('Failed to get Sentinel Hub image URL: ' + data.error);
+                    return;
+                }
+
+                if (!map.getSource('sentinel-raster-source')) {
+                    map.addSource('sentinel-raster-source', {
+                        type: 'raster',
+                        tiles: [data.url], // This is now a WMTS tile URL template
+                        tileSize: 256,
+                        // Optionally set attribution
+                        attribution: 'Sentinel-2 data &copy; ESA Copernicus'
+                    });
+
+                    map.addLayer({
+                        id: 'sentinel-raster-layer',
+                        type: 'raster',
+                        source: 'sentinel-raster-source',
+                        paint: {
+                            'raster-opacity': 0.8 // Adjust opacity as needed
+                        }
+                    }, 'road-label'); // Insert before labels for better visibility
+
+                } else {
+                    // If source already exists, just show the layer
+                    map.setLayoutProperty('sentinel-raster-layer', 'visibility', 'visible');
+                }
+
+                // Update button visibility
+                document.getElementById('live-btn').style.display = 'none';
+                document.getElementById('hide-btn').style.display = 'block';
+
+            } catch (err) {
+                alert('Failed to load Sentinel image: ' + err.message);
+                console.error(err);
+            }
+        };
+
+        // Hide Sentinel Image button
+        document.getElementById('hide-btn').onclick = () => {
+            if (map.getLayer('sentinel-raster-layer')) {
+                map.setLayoutProperty('sentinel-raster-layer', 'visibility', 'none');
+            }
+            document.getElementById('live-btn').style.display = 'block';
+            document.getElementById('hide-btn').style.display = 'none';
+        };
+
+        // Ensure the map resizes if the sidebar opens/closes (optional, for better responsiveness)
+        map.on('resize', () => {
+            map.resize();
+        });
+    </script>
 </body>
 </html>
